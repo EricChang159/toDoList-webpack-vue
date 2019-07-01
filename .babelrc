@@ -1,0 +1,8 @@
+//演示Vue render的方法，以及vue也可以寫jsx代碼!!!!!!!!!!!!!!!!!!!!!!!!!!!ㄅ
+
+{
+  "presets": ["env"], //
+
+  "plugins": ["transform-vue-jsx"]
+  //用來轉化vue裡面的jsx代碼，因為vue跟react支援的代碼會有區別!!!!!!!!!!!!!!!!
+}
