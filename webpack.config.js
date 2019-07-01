@@ -12,6 +12,11 @@ const webpack = require("webpack"); //特別注意要引用
 //process是用來讀取package.json的變量名稱資料的方法。 很神
 //並且將module.exports移至下方，新增const config變量取代(目前不知為何)
 const ExtractPlugin = require('extract-text-webpack-plugin')
+//作品已完成，但是如果一次就載入所有檔案，不是線上環境想要的效果，所以用這個工具，可以把指定的檔案拉出來，
+//這次拉的是CSS stylus的代碼。
+//安裝 npm install --save-dev extract-text-webpack-plugin
+//用來幫我們把非JS原生代碼，拉出來，像是我們打包好的CSS語言存進去了js中，拉出來單獨變成會CSS會比較好。
+
 
 const config = {
     target: "web",
@@ -22,7 +27,7 @@ const config = {
     //output 為出口 filename 在run build時會創建指定文件
     //此時index.js資料(vue阿或是img,css樣式等等)傳入至webpack，再進行打包轉換再以下output至bundle.js
     output: {
-        filename: "bundle.js",
+        filename: "bundle.[hash:8].js",
         path: path.join(__dirname, "dist") //在根目錄下創建dist檔案，沒檔名為資料夾
     },
     module: {
@@ -32,13 +37,7 @@ const config = {
                 test: /\.vue$/,
                 loader: "vue-loader"
             },
-            {
-                //配置CSS，注意這邊不使用loader用use陣列方法，使用css-loader功能為讀出CSS檔，style在用另一種方法，
-                //將CSS-loader抓出來的資料利用style-loader配置到html中的style。
-                //以洋蔥式的方法 層層往上傳遞。
-                test: /\.css$/,
-                use: ["style-loader", "css-loader"]
-            },
+
             {
                 test: /\.(gif|jpg|jpeg|svg|png)$/,
                 use: [{
@@ -55,23 +54,7 @@ const config = {
                 loader: "babel-loader"
 
             },
-            {
-                test: /\.styl/,
-                use: [
-                    "style-loader",
-                    "css-loader",
-                    {
-                        loader: "postcss-loader", //功能由下往上丟，接收stylus-loader傳過來的資料進行處理
-                        options: { //然後處理完再丟給css-loader
-                            //此處功能就是說，stylus已經會提供sourceMap
-                            //而postcss-loader也是提供source，語法就是在跟他說已經是了，不要再轉格式!?，增加效率
-                            //這都是既定用法~
-                            sourceMap: true
-                        }
-                    },
-                    "stylus-loader"
-                ]
-            }
+
         ]
     },
     plugins: [
@@ -87,26 +70,84 @@ const config = {
     ]
 };
 
-if (isDev) {
+if (isDev) { //開發環境專用工具都在這裡
+    config.module.rules.push({ //直接使用CSS代碼，
+        test: /\.styl/,
+
+        use: [
+            "style-loader",
+            "css-loader",
+            {
+                loader: "postcss-loader", //功能由下往上丟，接收stylus-loader傳過來的資料進行處理
+                options: { //然後處理完再丟給css-loader
+                    //此處功能就是說，stylus已經會提供sourceMap
+                    //而postcss-loader也是提供source，語法就是在跟他說已經是了，不要再轉格式!?，增加效率
+                    //這都是既定用法~
+                    sourceMap: true
+                }
+            },
+            "stylus-loader"
+        ]
+
+    })
     config.devtool = "#cheap-module-eval-source-map";
-    (config.devServer = {
-        //devServe為webpack2新增物件語法
-        port: 8000,
-        host: "0.0.0.0",
-        //host設置這樣的好處，可以透過localhost 0.0.0.1進行訪問
-        //也可透過本機內網ip進行訪問，可以在別人電腦上訪問，也可用手機，如果直接設定成localhost就沒有這兩個好處
-        overlay: {
-            //基本配置用來報錯
-            errors: true
-        }, //historyFallback 好像也是常用語法
-        hot: true //啟動熱加載，不需要重置頁面就會自動刷新，正常來說需要寫語法來處理熱加載過程，怎麼處理是要自己定義的
-        //但是因為這邊用的是vue，vue-loader就自動加載模塊功能，所以不需要額外編寫處理熱加載的方法。
-        //不知道是不是單頁面應用的方法，需要再研究!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    }),
+    config.devServer = {
+            //devServe為webpack2新增物件語法
+            port: 8000,
+            host: "0.0.0.0",
+            //host設置這樣的好處，可以透過localhost 0.0.0.1進行訪問
+            //也可透過本機內網ip進行訪問，可以在別人電腦上訪問，也可用手機，如果直接設定成localhost就沒有這兩個好處
+            overlay: {
+                //基本配置用來報錯
+                errors: true
+            }, //historyFallback 好像也是常用語法
+            hot: true //啟動熱加載，不需要重置頁面就會自動刷新，正常來說需要寫語法來處理熱加載過程，怎麼處理是要自己定義的
+            //但是因為這邊用的是vue，vue-loader就自動加載模塊功能，所以不需要額外編寫處理熱加載的方法。
+            //不知道是不是單頁面應用的方法，需要再研究!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        },
+        config.plugins.push(
+            new webpack.HotModuleReplacementPlugin(), //啟動hot功能的插件
+            new webpack.NoEmitOnErrorsPlugin() //減少不需要的信息展示
+        );
+} else { //正式環境特別部分都寫在這裡
+    config.entry = {
+        app: path.join(__dirname, 'src/index.js'),
+        vendor: ['vue'] //不常會更動到的代碼(類庫帶碼)，因為每次的build代碼會越來越大，所以要將業務邏輯代碼分離。
+    }
+    config.output.filename = '[name].[chunkhash:8].js' //hash可以看成節點，節點的名稱，如果用hash是整個大節點dom概念的名稱
+    //那chunkhash是每隔小節點的名稱命名，這樣就可以讓名稱不一樣，可以以此分開dev 與上市的檔案
+    config.module.rules.push({ //希望在線上環境中可以分離CSS檔案
+        test: /\.styl/,
+        use: ExtractPlugin.extract({
+            fallback: 'style-loader', //style-loader適用來CSS-loader的CSS語言轉為js語言，讓他可以輸出在html中的style標籤
+            use: [ //但這邊是要輸出成CSS，放入css檔中，所以不需要style-loader在編寫成js語法
+                "css-loader",
+                {
+                    loader: "postcss-loader", //功能由下往上丟，接收stylus-loader傳過來的資料進行處理
+                    options: { //然後處理完再丟給css-loader
+                        //此處功能就是說，stylus已經會提供sourceMap
+                        //而postcss-loader也是提供source，語法就是在跟他說已經是了，不要再轉格式!?，增加效率
+                        //這都是既定用法~
+                        sourceMap: true
+                    }
+                },
+                "stylus-loader"
+            ]
+
+        })
+    })
     config.plugins.push(
-        new webpack.HotModuleReplacementPlugin(), //啟動hot功能的插件
-        new webpack.NoEmitOnErrorsPlugin() //減少不需要的信息展示
-    );
+        new ExtractPlugin('styles.[contentHash:8].css'), //設定名稱
+        new webpack.optimize.CommonsChunkPlugin({
+            name: 'vendor'
+        }),
+        new webpack.optimize.CommonsChunkPlugin({
+            name: 'runtime' //將webpack生成代碼集中起來，webpack會給每個模塊命名，但因為當更動webpack的時候，會在檔案build的過程中，插入編譯碼，造成會有順序上的問題
+            //如此一來會影響到chunkhash值(因為是以節點命名)，這樣想用hash長緩存的效果就會沒有(常緩存是??)，所以把webpack板模分開，就可以避免這個問題，必須放在vendor以後否則會失效，
+            //因為，webpack板模在最後面，就不會有順序問題
+        })
+
+    )
 }
 
 module.exports = config;
